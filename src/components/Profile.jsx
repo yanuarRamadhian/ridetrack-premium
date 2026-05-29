@@ -39,7 +39,14 @@ const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({ ...profile });
 
-  // Handle local file uploads & base64 dynamic image compression
+  // 1.1 Crop States for Interactive Circular Cropper Modal
+  const [cropImage, setCropImage] = useState(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  // Handle local file selection - triggers the crop modal
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -50,40 +57,74 @@ const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
       
       const reader = new FileReader();
       reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          // Dynamic scaling using Canvas to 128x128 for super light cloud sync & fast loading
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 128;
-          const MAX_HEIGHT = 128;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Convert to compressed Base64 JPEG URL
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
-          setFormData({ ...formData, avatar: compressedDataUrl });
-        };
-        img.src = event.target.result;
+        setCropImage(event.target.result);
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  // Dragging event handlers for panning the avatar image inside circular viewport
+  const handleDragStart = (clientX, clientY) => {
+    setIsDragging(true);
+    setDragStart({ x: clientX - pan.x, y: clientY - pan.y });
+  };
+
+  const handleDragMove = (clientX, clientY) => {
+    if (!isDragging) return;
+    setPan({
+      x: clientX - dragStart.x,
+      y: clientY - dragStart.y
+    });
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
+
+  // Performs actual image cropping in a virtual canvas to 150x150 pixels with 82% quality
+  const handleCropSave = () => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 150;
+      canvas.height = 150;
+      const ctx = canvas.getContext('2d');
+
+      // Fill with dark theme background
+      ctx.fillStyle = '#0b0f19';
+      ctx.fillRect(0, 0, 150, 150);
+
+      // Viewport size: 180px, Canvas size: 150px
+      const ratio = 150 / 180;
+      const centerX = 150 / 2;
+      const centerY = 150 / 2;
+
+      // Fit inside 180x180 viewport
+      const imgRatio = img.width / img.height;
+      let drawW, drawH;
+      if (imgRatio > 1) {
+        drawW = 180;
+        drawH = 180 / imgRatio;
+      } else {
+        drawW = 180 * imgRatio;
+        drawH = 180;
+      }
+
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.translate(pan.x * ratio, pan.y * ratio);
+      ctx.scale(zoom, zoom);
+      
+      ctx.drawImage(img, - (drawW * ratio) / 2, - (drawH * ratio) / 2, drawW * ratio, drawH * ratio);
+      ctx.restore();
+
+      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      setFormData({ ...formData, avatar: croppedDataUrl });
+      setCropImage(null); // Close crop modal
+    };
+    img.src = cropImage;
   };
 
   // Save profile changes to localStorage and sync global user db
@@ -404,6 +445,69 @@ const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
           );
         })}
       </div>
+
+      {/* Interactive Crop Modal Overlay */}
+      {cropImage && (
+        <div className="crop-modal-overlay">
+          <div className="crop-modal-card">
+            <h3 style={{ fontSize: '1rem', fontWeight: 'bold', margin: 0 }}>Sesuaikan Foto Anda ✂️</h3>
+            <p className="crop-instructions">Geser gambar untuk menyesuaikan posisi. Gunakan slider di bawah untuk memperbesar/memperkecil.</p>
+            
+            <div 
+              className="crop-viewport"
+              onMouseDown={(e) => handleDragStart(e.clientX, e.clientY)}
+              onMouseMove={(e) => handleDragMove(e.clientX, e.clientY)}
+              onMouseUp={handleDragEnd}
+              onMouseLeave={handleDragEnd}
+              onTouchStart={(e) => handleDragStart(e.touches[0].clientX, e.touches[0].clientY)}
+              onTouchMove={(e) => handleDragMove(e.touches[0].clientX, e.touches[0].clientY)}
+              onTouchEnd={handleDragEnd}
+            >
+              <img 
+                src={cropImage} 
+                className="crop-image-element" 
+                style={{ 
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                  transition: isDragging ? 'none' : 'transform 0.05s ease'
+                }} 
+              />
+            </div>
+            
+            <span className="crop-zoom-label">Perbesar / Perkecil</span>
+            <input 
+              type="range" 
+              min="1" 
+              max="3" 
+              step="0.05" 
+              value={zoom} 
+              className="crop-zoom-slider"
+              onChange={(e) => setZoom(parseFloat(e.target.value))}
+            />
+            
+            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                onClick={handleCropSave}
+                style={{ flex: 2, fontSize: '0.85rem', padding: '10px 14px' }}
+              >
+                <Check size={14} /> Potong & Simpan
+              </button>
+              <button 
+                type="button" 
+                className="btn" 
+                onClick={() => setCropImage(null)}
+                style={{ flex: 1, fontSize: '0.85rem', padding: '10px 14px', backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)' }}
+              >
+                <X size={14} /> Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
