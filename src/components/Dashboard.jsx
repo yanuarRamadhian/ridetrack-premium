@@ -106,7 +106,7 @@ const Dashboard = ({ rides = [], onUpdateRideTitle, onDeleteRide }) => {
       date: "Baru saja"
     };
 
-    // Update comments array in map
+    // Update comments array in map locally first for zero-lag premium UX
     const currentComments = commentsMap[rideId] || [];
     const updatedComments = [...currentComments, newCommentObj];
     const newCommentsMap = { ...commentsMap, [rideId]: updatedComments };
@@ -115,18 +115,71 @@ const Dashboard = ({ rides = [], onUpdateRideTitle, onDeleteRide }) => {
     localStorage.setItem('ridetrack_comments_map', JSON.stringify(newCommentsMap));
     setCommentInputText('');
 
-    // Update comment counts in Supabase
+    // Insert comment row globally into Supabase comments table
     if (supabase) {
       try {
+        const { error: insertErr } = await supabase
+          .from('comments')
+          .insert([{
+            ride_id: rideId,
+            rider_name: newCommentObj.user,
+            rider_avatar: newCommentObj.avatar,
+            content: newCommentObj.content
+          }]);
+
+        if (insertErr) {
+          console.error("Gagal menyimpan komentar ke Supabase:", insertErr);
+        }
+
+        // Also update comment counts in rides table
         await supabase
           .from('rides')
           .update({ comments: updatedComments.length })
           .eq('id', rideId);
       } catch (err) {
-        console.error("Gagal sinkronisasi comments count ke Supabase:", err);
+        console.error("Gagal sinkronisasi comments ke Supabase:", err);
       }
     }
   };
+
+  // Fetch global comments from Supabase Cloud Table
+  useEffect(() => {
+    if (supabase) {
+      const fetchGlobalComments = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('comments')
+            .select('*')
+            .order('created_at', { ascending: true });
+
+          if (!error && data) {
+            // Group comments by ride_id
+            const grouped = {};
+            data.forEach(item => {
+              if (!grouped[item.ride_id]) {
+                grouped[item.ride_id] = [];
+              }
+              grouped[item.ride_id].push({
+                id: item.id,
+                user: item.rider_name,
+                avatar: item.rider_avatar,
+                content: item.content,
+                date: new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              });
+            });
+            // Update commentsMap state & sync with localStorage
+            setCommentsMap(grouped);
+            localStorage.setItem('ridetrack_comments_map', JSON.stringify(grouped));
+          } else if (error) {
+            console.warn("Gagal mengambil komentar dari Supabase, beralih ke local storage:", error.message);
+          }
+        } catch (err) {
+          console.error("Gagal koneksi tabel komentar Supabase:", err);
+        }
+      };
+      fetchGlobalComments();
+    }
+  }, [rides]);
 
   // Close options menu when clicking outside anywhere on the screen
   React.useEffect(() => {
