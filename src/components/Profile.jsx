@@ -39,6 +39,170 @@ const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({ ...profile });
 
+  // Social connection states (Add friends / followers)
+  const [followingList, setFollowingList] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ridetrack_following');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResult, setSearchResult] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+
+  // Fetch following list on component mount
+  useEffect(() => {
+    if (supabase && currentUser) {
+      const fetchFollowing = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('friends')
+            .select('*')
+            .eq('user_id', currentUser.id);
+          if (!error && data) {
+            setFollowingList(data);
+            localStorage.setItem('ridetrack_following', JSON.stringify(data));
+          }
+        } catch (err) {
+          console.error("Gagal memuat list teman:", err);
+        }
+      };
+      fetchFollowing();
+    }
+  }, [currentUser]);
+
+  // Handle Friend Search using exact Account Code (RT-ID) or partial Username
+  const handleFriendSearch = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    setSearchLoading(true);
+    setSearchResult(null);
+    setSearchError('');
+
+    let searchVal = searchQuery.trim();
+    
+    // Check if user entered an Account Code (e.g. RT-4)
+    let parsedId = null;
+    if (searchVal.toUpperCase().startsWith('RT-')) {
+      parsedId = parseInt(searchVal.substring(3));
+    }
+
+    if (supabase) {
+      try {
+        let query = supabase.from('riders').select('*');
+        if (parsedId !== null && !isNaN(parsedId)) {
+          query = query.eq('id', parsedId);
+        } else {
+          query = query.ilike('name', `%${searchVal}%`);
+        }
+
+        const { data, error } = await query;
+        if (error) {
+          setSearchError("Gagal mencari rider: " + error.message);
+        } else if (!data || data.length === 0) {
+          setSearchError("Rider tidak ditemukan. Coba cek kembali Kode Akun atau Username!");
+        } else {
+          // Exclude ourselves
+          const filtered = data.filter(r => r.id !== currentUser?.id);
+          if (filtered.length === 0) {
+            setSearchError("Anda tidak dapat menambahkan diri sendiri sebagai teman! 😉");
+          } else {
+            setSearchResult(filtered);
+          }
+        }
+      } catch (err) {
+        setSearchError("Kesalahan jaringan: " + err.message);
+      } finally {
+        setSearchLoading(false);
+      }
+    } else {
+      // Offline fallback: Search local storage
+      const users = JSON.parse(localStorage.getItem('ridetrack_users') || '[]');
+      const filtered = users.filter(u => {
+        const matches = parsedId !== null && !isNaN(parsedId) 
+          ? u.id === parsedId 
+          : u.name.toLowerCase().includes(searchVal.toLowerCase());
+        return matches && u.id !== currentUser?.id;
+      });
+
+      if (filtered.length === 0) {
+        setSearchError("Rider tidak ditemukan secara lokal!");
+      } else {
+        setSearchResult(filtered);
+      }
+      setSearchLoading(false);
+    }
+  };
+
+  // Follow / Add friend rider action
+  const handleFollowRider = async (rider) => {
+    if (!currentUser) return;
+    
+    const isAlreadyFollowing = followingList.some(item => Number(item.friend_id) === Number(rider.id));
+    if (isAlreadyFollowing) {
+      alert(`Anda sudah berteman/mengikuti ${rider.name}!`);
+      return;
+    }
+
+    const newFriendObj = {
+      user_id: currentUser.id,
+      friend_id: rider.id,
+      friend_name: rider.name,
+      friend_avatar: rider.avatar || `https://i.pravatar.cc/150?u=${encodeURIComponent(rider.email || rider.id)}`
+    };
+
+    // Update state & localStorage locally
+    const updatedList = [...followingList, newFriendObj];
+    setFollowingList(updatedList);
+    localStorage.setItem('ridetrack_following', JSON.stringify(updatedList));
+
+    // Supabase Sync
+    if (supabase) {
+      try {
+        const { error } = await supabase
+          .from('friends')
+          .insert([newFriendObj]);
+
+        if (error) {
+          console.error("Gagal menambahkan teman di Supabase:", error);
+        } else {
+          alert(`Berhasil mengikuti ${rider.name}! Rutenya kini akan muncul di filter Following Anda 🏍️`);
+        }
+      } catch (err) {
+        console.error("Kesalahan jaringan mengikuti teman:", err);
+      }
+    } else {
+      alert(`Berhasil mengikuti ${rider.name} secara lokal!`);
+    }
+  };
+
+  // Unfollow / Remove friend action
+  const handleUnfollowRider = async (friendId, friendName) => {
+    if (!currentUser) return;
+    
+    if (window.confirm(`Apakah Anda yakin ingin berhenti berteman/mengikuti ${friendName}?`)) {
+      const updatedList = followingList.filter(item => Number(item.friend_id) !== Number(friendId));
+      setFollowingList(updatedList);
+      localStorage.setItem('ridetrack_following', JSON.stringify(updatedList));
+
+      if (supabase) {
+        try {
+          await supabase
+            .from('friends')
+            .delete()
+            .eq('user_id', currentUser.id)
+            .eq('friend_id', friendId);
+        } catch (err) {
+          console.error("Gagal menghapus teman di Supabase:", err);
+        }
+      }
+    }
+  };
+
   // 1.1 Crop States for Interactive Circular Cropper Modal
   const [cropImage, setCropImage] = useState(null);
   const [zoom, setZoom] = useState(1);
@@ -215,8 +379,34 @@ const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
               <div className="profile-name-row">
                 <div>
                   <h2 className="profile-name">{profile.name}</h2>
-                  <div className="profile-location">
-                    <MapPin size={14} color="var(--accent-color)" /> {profile.location || "Earth"}
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '4px' }}>
+                    <div className="profile-location" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <MapPin size={13} color="var(--accent-color)" /> {profile.location || "Jakarta, Indonesia"}
+                    </div>
+                    {currentUser?.id && (
+                      <span 
+                        title="Klik untuk menyalin Kode Akun" 
+                        onClick={() => {
+                          navigator.clipboard.writeText(`RT-${currentUser.id}`);
+                          alert("Kode Akun berhasil disalin! Bagikan ke teman Anda untuk di-invite 🏍️");
+                        }}
+                        style={{
+                          backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                          border: '1px solid rgba(0, 255, 136, 0.25)',
+                          color: 'var(--accent-color)',
+                          fontSize: '0.68rem',
+                          fontWeight: 'bold',
+                          padding: '2px 8px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}
+                      >
+                        🆔 RT-{currentUser.id}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -444,6 +634,113 @@ const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
             </div>
           );
         })}
+      </div>
+
+      {/* 5. Friends & Followers Social Module */}
+      <h3 style={{ fontSize: '1rem', fontWeight: 'bold', margin: '1.5rem 0 0.75rem 0', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Temukan Teman / Klub Rider
+      </h3>
+      <div className="profile-goal-card" style={{ marginBottom: '1.5rem', animation: 'fadeIn 0.3s ease' }}>
+        <h4 style={{ fontWeight: 'bold', fontSize: '0.95rem', marginBottom: '8px', color: 'var(--accent-color)' }}>
+          🔍 Tambah Teman Lintas Akun (Strava Mode)
+        </h4>
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+          Masukkan <strong>Kode Akun</strong> (contoh: <code>RT-4</code>) atau <strong>Username</strong> teman Anda untuk saling mengikuti rute touring!
+        </p>
+
+        {/* Invite Code Search Form */}
+        <form onSubmit={handleFriendSearch} style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+          <input 
+            type="text" 
+            placeholder="e.g. RT-4 atau Rian" 
+            className="profile-edit-input"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ flex: 1, margin: 0, padding: '10px 14px', fontSize: '0.85rem' }}
+            required
+          />
+          <button type="submit" className="btn btn-primary" style={{ padding: '10px 18px', fontSize: '0.85rem' }} disabled={searchLoading}>
+            {searchLoading ? 'Mencari...' : 'Cari Rider'}
+          </button>
+        </form>
+
+        {/* Search Results Display */}
+        {searchError && (
+          <div style={{ fontSize: '0.78rem', color: 'var(--danger-color)', backgroundColor: 'rgba(255, 51, 102, 0.08)', padding: '8px 12px', borderRadius: '10px', marginBottom: '12px' }}>
+            ⚠️ {searchError}
+          </div>
+        )}
+
+        {searchResult && searchResult.length > 0 && (
+          <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', padding: '10px', marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 'bold', display: 'block', marginBottom: '8px' }}>RIDER DITEMUKAN:</span>
+            {searchResult.map(rider => {
+              const isFollowing = followingList.some(item => Number(item.friend_id) === Number(rider.id));
+              return (
+                <div key={rider.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <img 
+                      src={rider.avatar || `https://i.pravatar.cc/150?u=${encodeURIComponent(rider.email || rider.id)}`} 
+                      alt={rider.name} 
+                      style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--accent-color)' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 'bold', fontSize: '0.82rem', color: '#fff' }}>{rider.name}</div>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>🆔 RT-{rider.id} | {rider.location}</div>
+                    </div>
+                  </div>
+                  <button 
+                    type="button" 
+                    className="btn btn-primary" 
+                    style={{ fontSize: '0.75rem', padding: '6px 12px', borderRadius: '8px', backgroundColor: isFollowing ? 'rgba(255,255,255,0.08)' : 'var(--accent-color)', color: isFollowing ? 'var(--text-secondary)' : '#000', border: isFollowing ? '1px solid rgba(255,255,255,0.1)' : 'none' }}
+                    onClick={() => handleFollowRider(rider)}
+                    disabled={isFollowing}
+                  >
+                    {isFollowing ? '✓ Diikuti' : '+ Ikuti / Add'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Following List Panel */}
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px', marginTop: '12px' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 'bold', display: 'block', marginBottom: '8px' }}>
+            👥 TEMAN YANG ANDA IKUTI ({followingList.length}):
+          </span>
+          {followingList.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {followingList.map(friend => (
+                <div key={friend.friend_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <img 
+                      src={friend.friend_avatar || 'https://i.pravatar.cc/150'} 
+                      alt={friend.friend_name} 
+                      style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover' }}
+                    />
+                    <div>
+                      <span style={{ fontWeight: 'bold', fontSize: '0.8rem', color: 'var(--text-primary)' }}>{friend.friend_name}</span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginLeft: '6px' }}>RT-{friend.friend_id}</span>
+                    </div>
+                  </div>
+                  <button 
+                    type="button" 
+                    className="btn btn-danger" 
+                    style={{ fontSize: '0.68rem', padding: '4px 8px', borderRadius: '6px' }}
+                    onClick={() => handleUnfollowRider(friend.friend_id, friend.friend_name)}
+                  >
+                    Batal Ikuti
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '8px 0' }}>
+              Belum ada teman yang diikuti. Bagikan kode akun Anda atau undang teman baru untuk berkendara bersama! 🏍️
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Interactive Crop Modal Overlay */}

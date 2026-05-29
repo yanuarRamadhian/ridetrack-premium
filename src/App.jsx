@@ -73,6 +73,7 @@ function App() {
             // Map snake_case database fields back to React camelCase
             const mappedRides = data.map(ride => ({
               id: ride.id,
+              riderId: ride.rider_id,
               user: ride.user_name,
               avatar: ride.avatar,
               title: ride.title,
@@ -145,6 +146,7 @@ function App() {
         if (!error && data) {
           const savedRide = {
             id: data.id,
+            riderId: data.rider_id,
             user: data.user_name,
             avatar: data.avatar,
             title: data.title,

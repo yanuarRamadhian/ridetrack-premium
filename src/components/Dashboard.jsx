@@ -29,11 +29,46 @@ const Dashboard = ({ rides = [], onUpdateRideTitle, onDeleteRide }) => {
   // MotoGP tilt active ID
   const [activeTiltId, setActiveTiltId] = useState(null);
 
+  // Feed Filter Tab State
+  const [filterTab, setFilterTab] = useState('all');
+  const [followingIds, setFollowingIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ridetrack_following');
+      if (saved) {
+        return JSON.parse(saved).map(item => Number(item.friend_id));
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  });
+
   // Current logged in user info (for posting comments)
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('ridetrack_current_user');
     return saved ? JSON.parse(saved) : null;
   });
+
+  // Sync following IDs dynamically for real-time feed filtering
+  useEffect(() => {
+    if (supabase && currentUser) {
+      const fetchFollowingIds = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('friends')
+            .select('friend_id')
+            .eq('user_id', currentUser.id);
+          if (!error && data) {
+            const ids = data.map(item => Number(item.friend_id));
+            setFollowingIds(ids);
+          }
+        } catch (err) {
+          console.error("Gagal sinkronisasi filter Following:", err);
+        }
+      };
+      fetchFollowingIds();
+    }
+  }, [currentUser]);
 
   // Local storage lists for liked rides
   const [likedIds, setLikedIds] = useState(() => {
@@ -195,16 +230,68 @@ const Dashboard = ({ rides = [], onUpdateRideTitle, onDeleteRide }) => {
     setActiveMenuId(activeMenuId === id ? null : id);
   };
 
+  // Filter rides array dynamically
+  const displayedRides = rides.filter(ride => {
+    if (filterTab === 'following') {
+      return followingIds.includes(Number(ride.riderId)) || Number(ride.riderId) === Number(currentUser?.id);
+    }
+    return true;
+  });
+
   return (
     <div className="dashboard">
       <div style={{marginBottom: '1.5rem', display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem'}}>
         {/* Quick filters / tags */}
-        <span style={{padding: '0.5rem 1rem', backgroundColor: 'var(--card-bg)', borderRadius: '20px', fontSize: '0.875rem', whiteSpace: 'nowrap'}}>All Rides</span>
-        <span style={{padding: '0.5rem 1rem', backgroundColor: 'var(--accent-color)', color: '#000', borderRadius: '20px', fontSize: '0.875rem', whiteSpace: 'nowrap', fontWeight: 'bold'}}>Following</span>
-        <span style={{padding: '0.5rem 1rem', backgroundColor: 'var(--card-bg)', borderRadius: '20px', fontSize: '0.875rem', whiteSpace: 'nowrap'}}>Clubs</span>
+        <span 
+          onClick={() => setFilterTab('all')}
+          style={{
+            padding: '0.5rem 1rem', 
+            backgroundColor: filterTab === 'all' ? 'var(--accent-color)' : 'var(--card-bg)', 
+            color: filterTab === 'all' ? '#000' : 'var(--text-primary)', 
+            borderRadius: '20px', 
+            fontSize: '0.875rem', 
+            whiteSpace: 'nowrap', 
+            cursor: 'pointer',
+            fontWeight: filterTab === 'all' ? 'bold' : 'normal',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          All Rides
+        </span>
+        <span 
+          onClick={() => setFilterTab('following')}
+          style={{
+            padding: '0.5rem 1rem', 
+            backgroundColor: filterTab === 'following' ? 'var(--accent-color)' : 'var(--card-bg)', 
+            color: filterTab === 'following' ? '#000' : 'var(--text-primary)', 
+            borderRadius: '20px', 
+            fontSize: '0.875rem', 
+            whiteSpace: 'nowrap', 
+            cursor: 'pointer',
+            fontWeight: filterTab === 'following' ? 'bold' : 'normal',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Following ({followingIds.length})
+        </span>
+        <span 
+          onClick={() => alert("Fitur Rider Clubs & Komunitas segera hadir di rilis berikutnya! 🏆")}
+          style={{
+            padding: '0.5rem 1rem', 
+            backgroundColor: 'var(--card-bg)', 
+            borderRadius: '20px', 
+            fontSize: '0.875rem', 
+            whiteSpace: 'nowrap',
+            cursor: 'pointer',
+            opacity: 0.6
+          }}
+        >
+          Clubs
+        </span>
       </div>
 
-      {rides.map(ride => (
+      {displayedRides.length > 0 ? (
+        displayedRides.map(ride => (
         <div key={ride.id} className="stat-card" style={{padding: '0', overflow: 'hidden', marginBottom: '1.5rem', position: 'relative'}}>
           
           {/* Deletion Confirmation Screen Overlay */}
@@ -558,7 +645,25 @@ const Dashboard = ({ rides = [], onUpdateRideTitle, onDeleteRide }) => {
             );
           })()}
         </div>
-      ))}
+      ))
+      ) : (
+        <div className="profile-goal-card" style={{ padding: '2rem', textAlign: 'center', animation: 'fadeIn 0.3s ease', marginTop: '1rem' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '10px' }}>🏍️💨</div>
+          <h4 style={{ fontWeight: 'bold', fontSize: '1rem', color: '#fff', marginBottom: '8px' }}>
+            {filterTab === 'following' ? 'Belum Ada Feed Teman' : 'Belum Ada Perjalanan'}
+          </h4>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', maxWidth: '300px', margin: '0 auto 15px auto', lineHeight: '1.4' }}>
+            {filterTab === 'following' 
+              ? 'Teman yang Anda ikuti belum mengunggah aktivitas berkendara, atau Anda belum menambahkan teman.'
+              : 'Belum ada aktivitas touring yang tercatat di sistem saat ini.'}
+          </p>
+          {filterTab === 'following' && (
+            <div style={{ fontSize: '0.78rem', color: 'var(--accent-color)', fontWeight: 'bold' }}>
+              💡 Masuk ke tab "Profil" lalu cari Kode Akun teman Anda!
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
