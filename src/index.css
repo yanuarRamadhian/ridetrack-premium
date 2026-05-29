@@ -1,0 +1,996 @@
+:root {
+  --bg-color: #0f1115; /* Very dark blue/black for modern feel */
+  --card-bg: #1a1d24; /* Slightly lighter for cards */
+  --text-primary: #ffffff;
+  --text-secondary: #94a3b8;
+  --accent-color: #00ff88; /* Neon green (Kawasaki/Sporty vibe) */
+  --accent-hover: #00e077;
+  --danger-color: #ff3366; /* Red for Stop/Danger */
+  --danger-hover: #e62e5c;
+  --warning-color: #ffcc00;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Base Layout for Mobile First */
+.app-container {
+  max-width: 480px; /* Mobile width */
+  margin: 0 auto;
+  min-height: 100vh;
+  background-color: var(--bg-color);
+  position: relative;
+  box-shadow: 0 0 20px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.header {
+  padding: 1.5rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.header h1 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(to right, #ffffff, var(--accent-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Dashboard / Feed */
+.dashboard {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.stat-card {
+  background-color: var(--card-bg);
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Buttons */
+.btn {
+  border: none;
+  border-radius: 50px;
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.btn-primary {
+  background-color: var(--accent-color);
+  color: #000;
+  box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 255, 136, 0.4);
+}
+
+.btn-danger {
+  background-color: var(--danger-color);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(255, 51, 102, 0.3);
+}
+
+.btn-danger:hover {
+  background-color: var(--danger-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 51, 102, 0.4);
+}
+
+/* Map Container */
+.map-container {
+  height: 300px;
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  margin-top: 1rem;
+  background-color: var(--card-bg);
+}
+
+/* Tracker screen specific */
+.tracker-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 2rem;
+  text-align: center;
+}
+
+.tracker-display .main-stat {
+  font-size: 4rem;
+  font-weight: 900;
+  color: var(--accent-color);
+  margin-bottom: 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tracker-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  width: 100%;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}
+
+/* Navigation Bottom Bar */
+.bottom-nav {
+  display: flex;
+  justify-content: space-around;
+  padding: 1rem;
+  background-color: var(--card-bg);
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.nav-item {
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.nav-item.active {
+  color: var(--accent-color);
+}
+
+/* Mode Selector (Simulator vs Real GPS) */
+.mode-selector {
+  display: flex;
+  background-color: var(--card-bg);
+  border-radius: 30px;
+  padding: 4px;
+  margin-bottom: 1.5rem;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.mode-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 0.6rem 1rem;
+  border-radius: 25px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.mode-btn.active {
+  background-color: var(--accent-color);
+  color: #000;
+  box-shadow: 0 2px 10px rgba(0, 255, 136, 0.2);
+}
+
+/* Premium Modal Overlay */
+.modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 17, 21, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Modal Content Box */
+.modal-content {
+  background-color: var(--card-bg);
+  border-radius: 24px;
+  padding: 2rem 1.5rem;
+  width: 100%;
+  max-width: 400px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+}
+
+.modal-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(to right, #ffffff, var(--accent-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.modal-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+  line-height: 1.4;
+}
+
+.modal-input-group {
+  margin-bottom: 1.5rem;
+}
+
+.modal-label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+.modal-input {
+  width: 100%;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0.875rem 1rem;
+  color: #fff;
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.modal-input:focus {
+  border-color: var(--accent-color);
+  background-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.15);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Glowing Pulse Animation for Active Rider Marker */
+@keyframes pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.7); }
+  70% { transform: scale(1.2); box-shadow: 0 0 0 12px rgba(0, 255, 136, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 255, 136, 0); }
+}
+
+.custom-rider-marker {
+  background-color: var(--accent-color);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 0 15px var(--accent-color);
+  animation: pulse 1.5s infinite;
+}
+
+/* Custom Dark Theme for Leaflet Popups */
+.leaflet-popup-content-wrapper {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.6) !important;
+  font-family: 'Inter', sans-serif !important;
+  padding: 4px !important;
+}
+
+.leaflet-popup-tip {
+  background-color: var(--card-bg) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.leaflet-popup-content {
+  margin: 12px !important;
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+}
+
+.leaflet-popup-content strong {
+  color: var(--accent-color) !important;
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  color: var(--text-secondary) !important;
+  padding: 8px 12px 0 0 !important;
+  font-size: 16px !important;
+}
+
+.leaflet-container a.leaflet-popup-close-button:hover {
+  color: var(--accent-color) !important;
+  background: transparent !important;
+}
+
+/* Floating Auto-Center Compass Button */
+.auto-center-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background-color: var(--card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.auto-center-btn:hover {
+  transform: scale(1.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.auto-center-btn.active {
+  color: #000;
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+  box-shadow: 0 4px 15px rgba(0, 255, 136, 0.4);
+}
+
+.auto-center-btn.active svg {
+  animation: compassRotate 6s linear infinite;
+}
+
+@keyframes compassRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Card Options Menu Dropdown */
+.card-menu-container {
+  position: relative;
+  margin-left: auto;
+}
+
+.card-menu-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.card-menu-btn:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.card-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: var(--card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  min-width: 150px;
+  z-index: 1010; /* Render on top of leaflet map container */
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  padding: 6px;
+  animation: fadeIn 0.2s ease;
+}
+
+.card-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  text-align: left;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.card-menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.card-menu-item.danger:hover {
+  background-color: rgba(255, 51, 102, 0.1);
+  color: var(--danger-color);
+}
+
+/* Inline Title Edit Form */
+.inline-edit-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.inline-edit-input {
+  flex: 1;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  font-weight: bold;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.inline-edit-input:focus {
+  border-color: var(--accent-color);
+  background-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.2);
+}
+
+.inline-edit-btn {
+  background: transparent;
+  border: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.inline-edit-btn.save {
+  background-color: rgba(0, 255, 136, 0.1);
+  color: var(--accent-color);
+  border: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.inline-edit-btn.save:hover {
+  background-color: var(--accent-color);
+  color: #000;
+}
+
+.inline-edit-btn.cancel {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.inline-edit-btn.cancel:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+}
+
+/* Card Overlay for Deletion Confirmation */
+.confirm-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(18, 20, 26, 0.95);
+  backdrop-filter: blur(4px);
+  z-index: 1020; /* Render completely on top of Leaflet panes and control elements */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.confirm-overlay-title {
+  font-weight: bold;
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.confirm-overlay-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.25rem;
+}
+
+.confirm-overlay-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+/* ==========================================================================
+   PROFILE & STATS PAGE STYLES
+   ========================================================================== */
+
+.profile-card {
+  background-color: var(--card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  position: relative;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+
+.profile-banner {
+  height: 120px;
+  background: linear-gradient(135deg, #0d1117 0%, #1a2333 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.profile-banner::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(45deg, rgba(0, 255, 136, 0.03) 0px, rgba(0, 255, 136, 0.03) 2px, transparent 2px, transparent 8px);
+}
+
+.profile-avatar-container {
+  position: absolute;
+  top: 70px;
+  left: 20px;
+  z-index: 2;
+}
+
+.profile-avatar {
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  border: 4px solid var(--card-bg);
+  box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+  background-color: #12141a;
+  object-fit: cover;
+}
+
+.profile-info {
+  padding: 50px 20px 20px 20px;
+}
+
+.profile-name-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.profile-name {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.profile-location {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin-bottom: 12px;
+}
+
+.profile-bio {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+/* Edit Profile Modal/Form Formats */
+.profile-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: rgba(255,255,255,0.02);
+  padding: 1.25rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.profile-edit-input {
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.profile-edit-input:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.15);
+}
+
+/* Lifetime Stats Cards */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-item-box {
+  background-color: var(--card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.stat-item-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+}
+
+.stat-item-box:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.stat-item-box.active::before {
+  background-color: var(--accent-color);
+}
+
+.stat-item-box.danger::before {
+  background-color: var(--danger-color);
+}
+
+.stat-box-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.stat-box-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* Weekly Target Goal Module */
+.profile-goal-card {
+  background-color: var(--card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.profile-goal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.profile-goal-bar-bg {
+  height: 10px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.profile-goal-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-color) 0%, #00ffaa 100%);
+  border-radius: 5px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
+}
+
+/* Badge Section */
+.badges-container {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.badge-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background-color: rgba(0, 255, 136, 0.05);
+  border: 1px solid rgba(0, 255, 136, 0.15);
+  border-radius: 20px;
+  color: var(--accent-color);
+  font-size: 0.8rem;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.badge-pill.locked {
+  background-color: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   MOTORCYCLE PERFORMANCE & TOUR UPGRADES
+   ========================================================================== */
+
+/* Lean Angle Giro Widget */
+.lean-container-box {
+  background-color: var(--card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  position: relative;
+  overflow: hidden;
+}
+
+.lean-meter-circle {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: 3px dashed rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: border-color 0.2s ease;
+}
+
+.lean-meter-circle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 1.5px;
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-50%);
+}
+
+.lean-bike-silhouette {
+  font-size: 2.2rem;
+  transition: transform 0.15s cubic-bezier(0.1, 0.8, 0.3, 1);
+  z-index: 2;
+  filter: drop-shadow(0 0 8px rgba(0, 255, 136, 0.4));
+}
+
+.lean-angle-tag {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.lean-angle-subtext {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+.lean-stats-column {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lean-stat-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.lean-stat-badge.left {
+  color: #38bdf8;
+  border-left: 3px solid #38bdf8;
+}
+
+.lean-stat-badge.right {
+  color: #f43f5e;
+  border-left: 3px solid #f43f5e;
+}
+
+/* Floating Biker POI Control Button */
+.poi-toggle-btn {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background-color: var(--card-bg);
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  transition: all 0.25s ease;
+}
+
+.poi-toggle-btn:hover {
+  transform: scale(1.05);
+}
+
+.poi-toggle-btn.active {
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+  color: #000;
+  box-shadow: 0 0 15px var(--accent-color);
+}
+
+/* Glowing Map Marker Styles */
+.custom-companion-marker {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: #38bdf8;
+  border: 3.5px solid white;
+  box-shadow: 0 0 15px #38bdf8;
+  animation: radarPulse 1.8s infinite ease-in-out;
+}
+
+.custom-poi-spbu-marker {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background-color: #eab308; /* Yellow fuel */
+  border: 3px solid white;
+  box-shadow: 0 0 12px #eab308;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-poi-bengkel-marker {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background-color: #f97316; /* Orange repair tool */
+  border: 3px solid white;
+  box-shadow: 0 0 12px #f97316;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Radar pulse animation for convoy companion riders */
+@keyframes radarPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(56, 189, 248, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+  }
+}
+
+/* Lean badge pill in dashboard feed cards */
+.cornering-stat-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: bold;
+}
+
