@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Tracker from './components/Tracker';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
 import Auth from './components/Auth';
+import { supabase } from './lib/supabaseClient';
 import { Home, Activity, User } from 'lucide-react';
 import './index.css';
 
@@ -58,6 +59,47 @@ function App() {
     return saved ? JSON.parse(saved) : DEFAULT_RIDES;
   });
 
+  // Fetch Rides from Supabase in Real-Time
+  useEffect(() => {
+    if (supabase && currentUser) {
+      const fetchRides = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('rides')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (!error && data) {
+            // Map snake_case database fields back to React camelCase
+            const mappedRides = data.map(ride => ({
+              id: ride.id,
+              user: ride.user_name,
+              avatar: ride.avatar,
+              title: ride.title,
+              date: ride.date,
+              distance: String(ride.distance),
+              topSpeed: String(ride.top_speed),
+              avgSpeed: String(ride.avg_speed),
+              route: ride.route,
+              maxLeanLeft: ride.max_lean_left,
+              maxLeanRight: ride.max_lean_right,
+              likes: ride.likes || 0,
+              comments: ride.comments || 0
+            }));
+            
+            // If we have cloud data, display it!
+            if (mappedRides.length > 0) {
+              setRides(mappedRides);
+            }
+          }
+        } catch (err) {
+          console.error("Gagal memuat perjalanan dari Supabase:", err);
+        }
+      };
+      fetchRides();
+    }
+  }, [currentUser]);
+
   const handleLoginSuccess = (user) => {
     setCurrentUser(user);
     localStorage.setItem('ridetrack_current_user', JSON.stringify(user));
@@ -73,12 +115,61 @@ function App() {
     setCurrentUser(updatedUser);
   };
 
-  const addRide = (newRide) => {
-    // Bind with the dynamic logged-in user profile details
+  const addRide = async (newRide) => {
     if (currentUser) {
       newRide.user = currentUser.name;
       newRide.avatar = `https://i.pravatar.cc/150?u=${encodeURIComponent(currentUser.email)}`;
     }
+
+    // Supabase Cloud Insert
+    if (supabase && currentUser) {
+      try {
+        const { data, error } = await supabase
+          .from('rides')
+          .insert([{
+            rider_id: currentUser.id,
+            user_name: newRide.user,
+            avatar: newRide.avatar,
+            title: newRide.title,
+            date: newRide.date,
+            distance: Number(newRide.distance),
+            top_speed: Number(newRide.topSpeed),
+            avg_speed: Number(newRide.avgSpeed),
+            route: newRide.route,
+            max_lean_left: newRide.maxLeanLeft || 0,
+            max_lean_right: newRide.maxLeanRight || 0
+          }])
+          .select()
+          .single();
+
+        if (!error && data) {
+          const savedRide = {
+            id: data.id,
+            user: data.user_name,
+            avatar: data.avatar,
+            title: data.title,
+            date: data.date,
+            distance: String(data.distance),
+            topSpeed: String(data.top_speed),
+            avgSpeed: String(data.avg_speed),
+            route: data.route,
+            maxLeanLeft: data.max_lean_left,
+            maxLeanRight: data.max_lean_right,
+            likes: data.likes || 0,
+            comments: data.comments || 0
+          };
+          setRides(prev => [savedRide, ...prev]);
+        } else {
+          console.error("Gagal menyimpan rute ke Supabase:", error);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+      setActiveTab('home');
+      return;
+    }
+
+    // LocalStorage Fallback
     setRides((prev) => {
       const updated = [newRide, ...prev];
       localStorage.setItem('ridetrack_rides', JSON.stringify(updated));
@@ -87,7 +178,23 @@ function App() {
     setActiveTab('home'); // Automatically switch to feed (home)
   };
 
-  const updateRideTitle = (id, newTitle) => {
+  const updateRideTitle = async (id, newTitle) => {
+    // Supabase Cloud Update
+    if (supabase) {
+      try {
+        const { error } = await supabase
+          .from('rides')
+          .update({ title: newTitle })
+          .eq('id', id);
+
+        if (error) {
+          console.error("Gagal mengupdate judul di Supabase:", error);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
     setRides((prev) => {
       const updated = prev.map(ride => 
         ride.id === id ? { ...ride, title: newTitle } : ride
@@ -97,7 +204,23 @@ function App() {
     });
   };
 
-  const deleteRide = (id) => {
+  const deleteRide = async (id) => {
+    // Supabase Cloud Delete
+    if (supabase) {
+      try {
+        const { error } = await supabase
+          .from('rides')
+          .delete()
+          .eq('id', id);
+
+        if (error) {
+          console.error("Gagal menghapus rute di Supabase:", error);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
     setRides((prev) => {
       const updated = prev.filter(ride => ride.id !== id);
       localStorage.setItem('ridetrack_rides', JSON.stringify(updated));

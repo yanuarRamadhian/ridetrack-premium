@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User, Mail, Lock, MapPin, Compass, AlertCircle } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 
 const Auth = ({ onLoginSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
@@ -11,10 +12,112 @@ const Auth = ({ onLoginSuccess }) => {
   const [error, setError] = useState('');
 
   // Handle Form Submission
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
+    // ------------------ SUPABASE CLOUD PIPELINE ------------------
+    if (supabase) {
+      try {
+        if (isLogin) {
+          // Cloud Login
+          const { data: user, error: loginError } = await supabase
+            .from('riders')
+            .select('*')
+            .eq('email', email.toLowerCase())
+            .maybeSingle();
+
+          if (loginError) {
+            setError(`Error database: ${loginError.message}`);
+            return;
+          }
+
+          if (!user) {
+            setError('Email tidak terdaftar. Silakan buat akun terlebih dahulu!');
+            return;
+          }
+
+          if (user.password !== password) {
+            setError('Password salah! Cek kembali kredensial Anda.');
+            return;
+          }
+
+          // Map database snake_case fields back to React camelCase
+          const mappedUser = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            password: user.password,
+            location: user.location,
+            bikeClass: user.bike_class || '150cc-250cc',
+            bio: user.bio || `Riding class: ${user.bike_class}. Let's tour! 🏍️`,
+            joined: user.created_at ? new Date(user.created_at).getFullYear() : 2026
+          };
+
+          onLoginSuccess(mappedUser);
+        } else {
+          // Cloud Register
+          if (!name.trim()) {
+            setError('Nama Rider wajib diisi!');
+            return;
+          }
+
+          // Check if email already taken
+          const { data: emailCheck, error: checkError } = await supabase
+            .from('riders')
+            .select('email')
+            .eq('email', email.toLowerCase())
+            .maybeSingle();
+
+          if (checkError) {
+            setError(`Error database: ${checkError.message}`);
+            return;
+          }
+
+          if (emailCheck) {
+            setError('Email sudah digunakan! Gunakan email lain atau silakan Masuk.');
+            return;
+          }
+
+          // Register new rider
+          const { data: newUser, error: regError } = await supabase
+            .from('riders')
+            .insert([{
+              name: name.trim(),
+              email: email.toLowerCase(),
+              password: password,
+              location: location.trim() || 'Jakarta, Indonesia',
+              bike_class: bikeClass,
+              bio: `Riding class: ${bikeClass}. Let's tour! 🏍️`
+            }])
+            .select()
+            .single();
+
+          if (regError) {
+            setError(`Gagal mendaftar: ${regError.message}`);
+            return;
+          }
+
+          const mappedUser = {
+            id: newUser.id,
+            name: newUser.name,
+            email: newUser.email,
+            password: newUser.password,
+            location: newUser.location,
+            bikeClass: newUser.bike_class || '150cc-250cc',
+            bio: newUser.bio || `Riding class: ${newUser.bike_class}. Let's tour! 🏍️`,
+            joined: new Date(newUser.created_at).getFullYear()
+          };
+
+          onLoginSuccess(mappedUser);
+        }
+      } catch (err) {
+        setError(`Kesalahan koneksi internet: ${err.message}`);
+      }
+      return;
+    }
+
+    // ------------------ LOCALSTORAGE FALLBACK PIPELINE ------------------
     // Fetch registered users database and pre-seed with default admin if empty
     const users = JSON.parse(localStorage.getItem('ridetrack_users') || '[]');
     if (users.length === 0) {
@@ -33,7 +136,6 @@ const Auth = ({ onLoginSuccess }) => {
     }
 
     if (isLogin) {
-      // ------------------ LOGIN PIPELINE ------------------
       const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
       
       if (!user) {
@@ -46,10 +148,8 @@ const Auth = ({ onLoginSuccess }) => {
         return;
       }
 
-      // Success
       onLoginSuccess(user);
     } else {
-      // ------------------ REGISTER PIPELINE ------------------
       if (!name.trim()) {
         setError('Nama Rider wajib diisi!');
         return;
@@ -72,11 +172,9 @@ const Auth = ({ onLoginSuccess }) => {
         joined: new Date().getFullYear()
       };
 
-      // Add to local DB
       users.push(newUser);
       localStorage.setItem('ridetrack_users', JSON.stringify(users));
 
-      // Auto login after signup
       onLoginSuccess(newUser);
     }
   };
