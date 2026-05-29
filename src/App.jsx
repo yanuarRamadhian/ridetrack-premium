@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Tracker from './components/Tracker';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
+import Auth from './components/Auth';
 import { Home, Activity, User } from 'lucide-react';
 import './index.css';
 
@@ -47,12 +48,37 @@ const DEFAULT_RIDES = [
 
 function App() {
   const [activeTab, setActiveTab] = useState('record');
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem('ridetrack_current_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  
   const [rides, setRides] = useState(() => {
     const saved = localStorage.getItem('ridetrack_rides');
     return saved ? JSON.parse(saved) : DEFAULT_RIDES;
   });
 
+  const handleLoginSuccess = (user) => {
+    setCurrentUser(user);
+    localStorage.setItem('ridetrack_current_user', JSON.stringify(user));
+    setActiveTab('home'); // Go to Feed home upon login
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('ridetrack_current_user');
+  };
+
+  const handleProfileUpdate = (updatedUser) => {
+    setCurrentUser(updatedUser);
+  };
+
   const addRide = (newRide) => {
+    // Bind with the dynamic logged-in user profile details
+    if (currentUser) {
+      newRide.user = currentUser.name;
+      newRide.avatar = `https://i.pravatar.cc/150?u=${encodeURIComponent(currentUser.email)}`;
+    }
     setRides((prev) => {
       const updated = [newRide, ...prev];
       localStorage.setItem('ridetrack_rides', JSON.stringify(updated));
@@ -79,12 +105,20 @@ function App() {
     });
   };
 
+  // Auth gate
+  if (!currentUser) {
+    return <Auth onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="app-container">
       <header className="header">
         <h1>RIDE<span style={{color: 'var(--text-primary)'}}>TRACK</span></h1>
-        <div style={{width: 32, height: 32, borderRadius: '50%', backgroundColor: 'var(--card-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-          <User size={18} color="var(--accent-color)" />
+        <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+          <span style={{fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 'bold'}}>{currentUser.name}</span>
+          <div style={{width: 32, height: 32, borderRadius: '50%', backgroundColor: 'var(--card-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+            <User size={18} color="var(--accent-color)" />
+          </div>
         </div>
       </header>
 
@@ -96,7 +130,14 @@ function App() {
         />
       )}
       {activeTab === 'record' && <Tracker onSaveRide={addRide} />}
-      {activeTab === 'profile' && <Profile rides={rides} />}
+      {activeTab === 'profile' && (
+        <Profile 
+          rides={rides} 
+          currentUser={currentUser} 
+          onLogout={handleLogout} 
+          onProfileUpdate={handleProfileUpdate}
+        />
+      )}
 
       <nav className="bottom-nav">
         <div 

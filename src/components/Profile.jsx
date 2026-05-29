@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Calendar, Award, Edit, Check, X, Shield, Activity, Compass, Flame } from 'lucide-react';
 
-const Profile = ({ rides = [] }) => {
-  // 1. Profile State initialized from localStorage
+const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
+  // 1. Profile State initialized from localStorage / currentUser props
   const [profile, setProfile] = useState(() => {
+    if (currentUser) {
+      return {
+        name: currentUser.name,
+        bio: currentUser.bio || `Riding class: ${currentUser.bikeClass || '150cc'}. Let's tour! 🏍️`,
+        location: currentUser.location || "Jakarta, Indonesia",
+        avatar: `https://i.pravatar.cc/150?u=${encodeURIComponent(currentUser.email)}`
+      };
+    }
     const saved = localStorage.getItem('ridetrack_profile');
     if (saved) {
       return JSON.parse(saved);
@@ -19,13 +27,28 @@ const Profile = ({ rides = [] }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({ ...profile });
 
-  // Save profile changes to localStorage
+  // Save profile changes to localStorage and sync global user db
   const handleSave = (e) => {
     e.preventDefault();
     if (formData.name.trim()) {
       const updated = { ...formData, name: formData.name.trim(), location: formData.location.trim(), bio: formData.bio.trim() };
       setProfile(updated);
       localStorage.setItem('ridetrack_profile', JSON.stringify(updated));
+      
+      if (currentUser) {
+        const updatedUser = { ...currentUser, name: updated.name, location: updated.location, bio: updated.bio };
+        localStorage.setItem('ridetrack_current_user', JSON.stringify(updatedUser));
+        
+        // Also update in registered users database
+        const users = JSON.parse(localStorage.getItem('ridetrack_users') || '[]');
+        const updatedUsers = users.map(u => u.email.toLowerCase() === currentUser.email.toLowerCase() ? { ...u, name: updated.name, location: updated.location, bio: updated.bio } : u);
+        localStorage.setItem('ridetrack_users', JSON.stringify(updatedUsers));
+        
+        if (onProfileUpdate) {
+          onProfileUpdate(updatedUser);
+        }
+      }
+      
       setIsEditing(false);
     }
   };
@@ -80,26 +103,39 @@ const Profile = ({ rides = [] }) => {
                     <MapPin size={14} color="var(--accent-color)" /> {profile.location || "Earth"}
                   </div>
                 </div>
-                <button 
-                  type="button" 
-                  className="btn" 
-                  onClick={() => {
-                    setFormData({ ...profile });
-                    setIsEditing(true);
-                  }}
-                  style={{
-                    padding: '0.4rem 0.8rem',
-                    fontSize: '0.8rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    color: 'var(--text-primary)'
-                  }}
-                >
-                  <Edit size={14} /> Edit Profil
-                </button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button 
+                    type="button" 
+                    className="btn" 
+                    onClick={() => {
+                      setFormData({ ...profile });
+                      setIsEditing(true);
+                    }}
+                    style={{
+                      padding: '0.5rem 0.9rem',
+                      fontSize: '0.8rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      color: 'var(--text-primary)',
+                      borderRadius: '12px'
+                    }}
+                  >
+                    <Edit size={14} /> Edit
+                  </button>
+                  {onLogout && (
+                    <button 
+                      type="button" 
+                      className="btn-logout" 
+                      onClick={onLogout}
+                      title="Keluar Sesi Rider"
+                    >
+                      Keluar
+                    </button>
+                  )}
+                </div>
               </div>
               <p className="profile-bio">{profile.bio}</p>
             </>
