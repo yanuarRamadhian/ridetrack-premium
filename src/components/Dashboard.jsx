@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup } from 'react-leaflet';
-import { Heart, MessageCircle, Share2, MapPin, MoreVertical, Edit2, Trash2, Check, X } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MapPin, MoreVertical, Edit2, Trash2, Check, X, Send } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { supabase } from '../lib/supabaseClient';
 
 // Custom glowing Leaflet DivIcons for Start and End coordinates
 const startIcon = typeof window !== 'undefined' ? L.divIcon({
@@ -20,10 +21,112 @@ const endIcon = typeof window !== 'undefined' ? L.divIcon({
 }) : null;
 
 const Dashboard = ({ rides = [], onUpdateRideTitle, onDeleteRide }) => {
-  const [activeMenuId, setActiveMenuId] = React.useState(null);
-  const [editingId, setEditingId] = React.useState(null);
-  const [editTitleText, setEditTitleText] = React.useState('');
-  const [deletingId, setDeletingId] = React.useState(null);
+  const [activeMenuId, setActiveMenuId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editTitleText, setEditTitleText] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+
+  // MotoGP tilt active ID
+  const [activeTiltId, setActiveTiltId] = useState(null);
+
+  // Current logged in user info (for posting comments)
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem('ridetrack_current_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  // Local storage lists for liked rides
+  const [likedIds, setLikedIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ridetrack_liked_rides');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Local state for likes count overrides (so updates are instant and fluid!)
+  const [likesOverrides, setLikesOverrides] = useState({});
+
+  // Local state for comments list map
+  const [commentsMap, setCommentsMap] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ridetrack_comments_map');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Open comments drawer ID
+  const [activeCommentsRideId, setActiveCommentsRideId] = useState(null);
+  const [commentInputText, setCommentInputText] = useState('');
+
+  // Handle Like trigger
+  const handleLike = async (rideId, currentLikes) => {
+    const isAlreadyLiked = likedIds.includes(rideId);
+    let newLikes = currentLikes;
+    let newLikedIds = [...likedIds];
+
+    if (isAlreadyLiked) {
+      newLikes = Math.max(0, currentLikes - 1);
+      newLikedIds = newLikedIds.filter(id => id !== rideId);
+    } else {
+      newLikes = currentLikes + 1;
+      newLikedIds.push(rideId);
+    }
+
+    // Update state & localStorage
+    setLikedIds(newLikedIds);
+    localStorage.setItem('ridetrack_liked_rides', JSON.stringify(newLikedIds));
+    setLikesOverrides(prev => ({ ...prev, [rideId]: newLikes }));
+
+    // Supabase Cloud Sync
+    if (supabase) {
+      try {
+        await supabase
+          .from('rides')
+          .update({ likes: newLikes })
+          .eq('id', rideId);
+      } catch (err) {
+        console.error("Gagal sinkronisasi likes ke Supabase:", err);
+      }
+    }
+  };
+
+  // Handle Comment Submit
+  const handleCommentSubmit = async (e, rideId) => {
+    e.preventDefault();
+    if (!commentInputText.trim()) return;
+
+    const newCommentObj = {
+      user: currentUser?.name || "Rider Speedster ⚡",
+      avatar: currentUser?.avatar || "https://i.pravatar.cc/150",
+      content: commentInputText.trim(),
+      date: "Baru saja"
+    };
+
+    // Update comments array in map
+    const currentComments = commentsMap[rideId] || [];
+    const updatedComments = [...currentComments, newCommentObj];
+    const newCommentsMap = { ...commentsMap, [rideId]: updatedComments };
+
+    setCommentsMap(newCommentsMap);
+    localStorage.setItem('ridetrack_comments_map', JSON.stringify(newCommentsMap));
+    setCommentInputText('');
+
+    // Update comment counts in Supabase
+    if (supabase) {
+      try {
+        await supabase
+          .from('rides')
+          .update({ comments: updatedComments.length })
+          .eq('id', rideId);
+      } catch (err) {
+        console.error("Gagal sinkronisasi comments count ke Supabase:", err);
+      }
+    }
+  };
 
   // Close options menu when clicking outside anywhere on the screen
   React.useEffect(() => {
@@ -283,20 +386,124 @@ const Dashboard = ({ rides = [], onUpdateRideTitle, onDeleteRide }) => {
             </div>
           )}
 
-          {/* Actions */}
-          <div style={{padding: '1rem', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.05)'}}>
-            <div style={{display: 'flex', gap: '1.5rem'}}>
-              <div style={{display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--text-secondary)', cursor: 'pointer'}}>
-                <Heart size={20} /> {ride.likes}
+          {/* MotoGP Inclinometer Telemetry Gauges */}
+          {ride.maxLeanLeft && Number(ride.maxLeanLeft) > 0 && (
+            <div className="motogp-telemetry-panel">
+              <div className="motogp-title-row">
+                <span className="motogp-title-tag">🏁 MotoGP Lean Angle Telemetry</span>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>Hover motor untuk miring!</span>
               </div>
-              <div style={{display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--text-secondary)', cursor: 'pointer'}}>
-                <MessageCircle size={20} /> {ride.comments}
+              <div className="motogp-gauge-wrapper">
+                {/* Left Lean angle */}
+                <div className="motogp-degree-badge" style={{ color: 'var(--warning-color)' }}>
+                  L {ride.maxLeanLeft}°
+                </div>
+                
+                {/* Visual bar scale */}
+                <div className="motogp-tilt-scale">
+                  <div className="motogp-tilt-fill left" style={{ width: `${Math.min((Number(ride.maxLeanLeft) / 55) * 50, 50)}%` }}></div>
+                  <div className="motogp-tilt-fill right" style={{ width: `${Math.min((Number(ride.maxLeanRight) / 55) * 50, 50)}%` }}></div>
+                </div>
+                
+                {/* Central dynamic interactive bike silhouette indicator */}
+                <div 
+                  className="motogp-bike-indicator"
+                  style={{ transform: `rotate(${activeTiltId === ride.id ? -Number(ride.maxLeanLeft) : Number(ride.maxLeanRight)}deg)` }}
+                  onMouseEnter={() => setActiveTiltId(ride.id)}
+                  onMouseLeave={() => setActiveTiltId(null)}
+                  onTouchStart={() => setActiveTiltId(ride.id)}
+                  onTouchEnd={() => setActiveTiltId(null)}
+                >
+                  🏍️
+                </div>
+
+                {/* Right Lean angle */}
+                <div className="motogp-degree-badge" style={{ color: 'var(--accent-color)' }}>
+                  R {ride.maxLeanRight}°
+                </div>
               </div>
             </div>
-            <div style={{color: 'var(--text-secondary)', cursor: 'pointer'}}>
-              <Share2 size={20} />
-            </div>
-          </div>
+          )}
+
+          {/* Actions Bar */}
+          {(() => {
+            const activeLikesCount = likesOverrides[ride.id] !== undefined ? likesOverrides[ride.id] : (ride.likes || 0);
+            const isLiked = likedIds.includes(ride.id);
+            const localComments = commentsMap[ride.id] || [];
+            const activeCommentsCount = (ride.comments || 0) + localComments.length;
+
+            return (
+              <>
+                <div style={{padding: '1rem', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: activeCommentsRideId === ride.id ? '1px solid rgba(255,255,255,0.05)' : 'none'}}>
+                  <div style={{display: 'flex', gap: '1.5rem'}}>
+                    <div 
+                      style={{display: 'flex', alignItems: 'center', gap: '0.35rem', color: isLiked ? '#ff3366' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: isLiked ? 'bold' : 'normal'}}
+                      onClick={() => handleLike(ride.id, ride.likes || 0)}
+                    >
+                      <Heart size={20} className={isLiked ? "liked-heart" : ""} /> {activeLikesCount}
+                    </div>
+                    <div 
+                      style={{display: 'flex', alignItems: 'center', gap: '0.35rem', color: activeCommentsRideId === ride.id ? 'var(--accent-color)' : 'var(--text-secondary)', cursor: 'pointer'}}
+                      onClick={() => setActiveCommentsRideId(activeCommentsRideId === ride.id ? null : ride.id)}
+                    >
+                      <MessageCircle size={20} /> {activeCommentsCount}
+                    </div>
+                  </div>
+                  <div 
+                    style={{color: 'var(--text-secondary)', cursor: 'pointer'}}
+                    onClick={() => {
+                      navigator.clipboard.writeText(`Rute Touring keren "${ride.title}" oleh ${ride.user}! Jarak: ${ride.distance}km.`);
+                      alert("Tautan aktivitas disalin! Bagikan ke teman klub motor Anda 🏍️");
+                    }}
+                  >
+                    <Share2 size={20} />
+                  </div>
+                </div>
+
+                {/* Collapsible Comments Section Drawer */}
+                {activeCommentsRideId === ride.id && (
+                  <div className="comments-section-container">
+                    {/* Add Comment Input Form */}
+                    <form className="comment-input-row" onSubmit={(e) => handleCommentSubmit(e, ride.id)}>
+                      <input 
+                        type="text" 
+                        placeholder="Tulis komentar touring..." 
+                        className="comment-text-input"
+                        value={commentInputText}
+                        onChange={(e) => setCommentInputText(e.target.value)}
+                        required
+                      />
+                      <button type="submit" className="btn btn-primary" style={{padding: '8px 12px', borderRadius: '12px'}}>
+                        <Send size={14} />
+                      </button>
+                    </form>
+
+                    {/* Comments List */}
+                    <div className="comments-list">
+                      {localComments.length > 0 ? (
+                        localComments.map((comment, index) => (
+                          <div key={index} className="comment-item">
+                            <img src={comment.avatar} alt={comment.user} className="comment-avatar" />
+                            <div className="comment-bubble">
+                              <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '2px'}}>
+                                <span style={{fontWeight: 'bold', fontSize: '0.75rem', color: 'var(--accent-color)'}}>{comment.user}</span>
+                                <span style={{fontSize: '0.65rem', color: 'var(--text-secondary)'}}>{comment.date}</span>
+                              </div>
+                              <p style={{margin: 0, fontSize: '0.78rem', color: 'var(--text-color)', textAlign: 'left'}}>{comment.content}</p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '10px 0'}}>
+                          Belum ada komentar. Jadilah yang pertama memberikan masukan! 🏍️
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       ))}
     </div>

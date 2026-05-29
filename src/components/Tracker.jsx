@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Square, Pause, Navigation, Compass, MapPin, Wrench, Shield } from 'lucide-react';
+import { Play, Square, Pause, Navigation, Compass, MapPin, Wrench, Shield, CloudSun, Wind, Droplets } from 'lucide-react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -97,6 +97,59 @@ const Tracker = ({ onSaveRide }) => {
   // Modal State
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [rideTitle, setRideTitle] = useState('');
+
+  // Smart Weather radar state
+  const [weatherData, setWeatherData] = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+
+  // Smart weather fetch from free, API-keyless Open-Meteo endpoint
+  const fetchWeather = async (lat, lng) => {
+    setWeatherLoading(true);
+    try {
+      const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m`);
+      const data = await response.json();
+      if (data && data.current) {
+        setWeatherData({
+          temp: data.current.temperature_2m,
+          humidity: data.current.relative_humidity_2m,
+          wind: data.current.wind_speed_10m,
+          code: data.current.weather_code
+        });
+      }
+    } catch (err) {
+      console.error("Gagal memuat cuaca dari Open-Meteo:", err);
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
+
+  // Weather riding advice logic tailored for bikers
+  const getWeatherAdvice = (code) => {
+    if (code === 0) return { text: "Cuaca cerah! Jalur kering & aman untuk miring-miring ☀️", color: "var(--accent-color)" };
+    if (code >= 1 && code <= 3) return { text: "Cuaca sejuk berawan. Sangat cocok untuk touring jarak jauh ⛅", color: "#60a5fa" };
+    if (code === 45 || code === 48) return { text: "Kabut tebal terdeteksi! Gunakan lampu utama & jaga jarak aman 🌫️", color: "#94a3b8" };
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return { text: "Hujan turun! Jalanan basah & licin. Kurangi kecepatan & pakai jas hujan 🌧️", color: "var(--danger-color)" };
+    if (code >= 95) return { text: "Badai petir! Kestabilan motor terganggu. Segera berteduh ⛈️", color: "#f59e0b" };
+    return { text: "Kondisi aman berkendara. Tetap patuhi rambu lalu lintas 🏍️", color: "var(--accent-color)" };
+  };
+
+  // Automatically request GPS position on page load to fetch exact local weather
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          fetchWeather(pos.coords.latitude, pos.coords.longitude);
+        },
+        (err) => {
+          // Fallback to Jakarta coordinate if blocked
+          fetchWeather(-6.2088, 106.8456);
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    } else {
+      fetchWeather(-6.2088, 106.8456);
+    }
+  }, []);
 
   const watchId = useRef(null);
   const timerRef = useRef(null);
@@ -346,6 +399,62 @@ const riderIcon = typeof window !== 'undefined' ? L.divIcon({
 
   return (
     <div className="tracker-display" style={{ width: '100%' }}>
+      {/* Smart Weather Radar Widget */}
+      {!isRecording && (
+        <div className="weather-radar-card">
+          {weatherLoading ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 0', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+              <span className="spinner-border" style={{ width: '1rem', height: '1rem', border: '2px solid var(--accent-color)', borderTopColor: 'transparent', animation: 'spin 1s linear infinite', borderRadius: '50%' }}></span>
+              Sedang memindai cuaca satelit...
+            </div>
+          ) : weatherData ? (
+            <>
+              <div className="weather-header">
+                <span className="weather-title">
+                  <CloudSun size={15} color="var(--accent-color)" /> Radar Cuaca Live
+                </span>
+                <span style={{ fontSize: '0.625rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                  GPS locked 🛰️
+                </span>
+              </div>
+              
+              <div className="weather-grid-metrics">
+                <div className="weather-metric-item">
+                  <CloudSun size={14} color="#60a5fa" />
+                  <span className="weather-metric-val">{weatherData.temp}°C</span>
+                  <span className="weather-metric-lbl">Suhu</span>
+                </div>
+                <div className="weather-metric-item">
+                  <Wind size={14} color="var(--accent-color)" />
+                  <span className="weather-metric-val">{weatherData.wind} <span style={{ fontSize: '0.6rem', fontWeight: 'normal' }}>km/h</span></span>
+                  <span className="weather-metric-lbl">Angin</span>
+                </div>
+                <div className="weather-metric-item">
+                  <Droplets size={14} color="#a855f7" />
+                  <span className="weather-metric-val">{weatherData.humidity}%</span>
+                  <span className="weather-metric-lbl">Lembap</span>
+                </div>
+              </div>
+
+              {(() => {
+                const advice = getWeatherAdvice(weatherData.code);
+                return (
+                  <div className="weather-advisor-box" style={{ borderLeft: `3px solid ${advice.color}` }}>
+                    <div style={{ flex: 1, fontSize: '0.72rem', color: 'var(--text-color)', fontWeight: 'bold', textAlign: 'left' }}>
+                      {advice.text}
+                    </div>
+                  </div>
+                );
+              })()}
+            </>
+          ) : (
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '10px 0', cursor: 'pointer' }} onClick={() => fetchWeather(-6.2088, 106.8456)}>
+              Gagal memindai cuaca satelit. Klik di sini untuk mencoba lagi.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Main Speed Stat */}
       <div className="main-stat">
         {speed.toFixed(1)}
