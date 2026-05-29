@@ -118,7 +118,7 @@ function App() {
   const addRide = async (newRide) => {
     if (currentUser) {
       newRide.user = currentUser.name;
-      newRide.avatar = `https://i.pravatar.cc/150?u=${encodeURIComponent(currentUser.email)}`;
+      newRide.avatar = currentUser.avatar || `https://i.pravatar.cc/150?u=${encodeURIComponent(currentUser.email)}`;
     }
 
     // Supabase Cloud Insert
@@ -239,8 +239,12 @@ function App() {
         <h1>RIDE<span style={{color: 'var(--text-primary)'}}>TRACK</span></h1>
         <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
           <span style={{fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 'bold'}}>{currentUser.name}</span>
-          <div style={{width: 32, height: 32, borderRadius: '50%', backgroundColor: 'var(--card-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-            <User size={18} color="var(--accent-color)" />
+          <div style={{width: 32, height: 32, borderRadius: '50%', overflow: 'hidden', border: '1.5px solid var(--accent-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--card-bg)'}}>
+            {currentUser.avatar ? (
+              <img src={currentUser.avatar} alt={currentUser.name} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+            ) : (
+              <User size={18} color="var(--accent-color)" />
+            )}
           </div>
         </div>
       </header>

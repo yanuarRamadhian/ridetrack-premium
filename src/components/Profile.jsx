@@ -1,5 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Calendar, Award, Edit, Check, X, Shield, Activity, Compass, Flame } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
+
+const PRESET_AVATARS = [
+  { name: 'Red Helmet Tracker', url: 'https://images.unsplash.com/photo-1599819811279-d5ad9cccf838?w=150&h=150&fit=crop&q=80' },
+  { name: 'Cafe Racer Biker', url: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=150&h=150&fit=crop&q=80' },
+  { name: 'Rider on Track', url: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=150&h=150&fit=crop&q=80' },
+  { name: 'Adventure Rider', url: 'https://images.unsplash.com/photo-1609630875171-b1321377ee65?w=150&h=150&fit=crop&q=80' },
+  { name: 'Scrambler Classic', url: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=150&h=150&fit=crop&q=80' },
+  { name: 'Urban Moto Racer', url: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&h=150&fit=crop&q=80' },
+  { name: 'Sport Lady Biker', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&q=80' },
+  { name: 'Speedster MotoGP', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&q=80' }
+];
 
 const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
   // 1. Profile State initialized from localStorage / currentUser props
@@ -9,7 +21,7 @@ const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
         name: currentUser.name,
         bio: currentUser.bio || `Riding class: ${currentUser.bikeClass || '150cc'}. Let's tour! 🏍️`,
         location: currentUser.location || "Jakarta, Indonesia",
-        avatar: `https://i.pravatar.cc/150?u=${encodeURIComponent(currentUser.email)}`
+        avatar: currentUser.avatar || `https://i.pravatar.cc/150?u=${encodeURIComponent(currentUser.email)}`
       };
     }
     const saved = localStorage.getItem('ridetrack_profile');
@@ -36,14 +48,30 @@ const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
       localStorage.setItem('ridetrack_profile', JSON.stringify(updated));
       
       if (currentUser) {
-        const updatedUser = { ...currentUser, name: updated.name, location: updated.location, bio: updated.bio };
+        const updatedUser = { ...currentUser, name: updated.name, location: updated.location, bio: updated.bio, avatar: updated.avatar };
         localStorage.setItem('ridetrack_current_user', JSON.stringify(updatedUser));
         
         // Also update in registered users database
         const users = JSON.parse(localStorage.getItem('ridetrack_users') || '[]');
-        const updatedUsers = users.map(u => u.email.toLowerCase() === currentUser.email.toLowerCase() ? { ...u, name: updated.name, location: updated.location, bio: updated.bio } : u);
+        const updatedUsers = users.map(u => u.email.toLowerCase() === currentUser.email.toLowerCase() ? { ...u, name: updated.name, location: updated.location, bio: updated.bio, avatar: updated.avatar } : u);
         localStorage.setItem('ridetrack_users', JSON.stringify(updatedUsers));
         
+        // Supabase Cloud Update for riders table!
+        if (supabase) {
+          supabase
+            .from('riders')
+            .update({ 
+              name: updated.name, 
+              location: updated.location, 
+              bio: updated.bio,
+              avatar: updated.avatar 
+            })
+            .eq('id', currentUser.id)
+            .then(({ error }) => {
+              if (error) console.error("Gagal sinkronisasi profil ke Supabase:", error);
+            });
+        }
+
         if (onProfileUpdate) {
           onProfileUpdate(updatedUser);
         }
@@ -141,8 +169,42 @@ const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
             </>
           ) : (
             <form className="profile-edit-form" onSubmit={handleSave}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '4px' }}>Edit Profil Rider</h3>
+              <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '8px' }}>Edit Profil Rider</h3>
               
+              {/* Profile Avatar Selection Gallery */}
+              <div style={{ marginBottom: '1rem' }}>
+                <span className="avatar-gallery-label">Pilih Foto Profil Sporty 🏍️</span>
+                <div className="avatar-gallery-grid">
+                  {PRESET_AVATARS.map((item, idx) => {
+                    const isSelected = formData.avatar === item.url;
+                    return (
+                      <div 
+                        key={idx} 
+                        className={`avatar-gallery-item ${isSelected ? 'selected' : ''}`}
+                        onClick={() => setFormData({ ...formData, avatar: item.url })}
+                        title={item.name}
+                        type="button"
+                      >
+                        <img src={item.url} alt={item.name} />
+                        {isSelected && <div className="avatar-gallery-checkmark">✓</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>ATAU TEMPEL URL FOTO KUSTOM:</span>
+                  <input 
+                    type="url" 
+                    className="profile-edit-input" 
+                    placeholder="https://example.com/foto-anda.jpg"
+                    value={formData.avatar}
+                    onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
+                    style={{ fontSize: '0.8rem', padding: '8px 12px' }}
+                  />
+                </div>
+              </div>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Nama Rider</span>
                 <input 

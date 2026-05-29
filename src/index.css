@@ -1180,4 +1180,71 @@ body {
   box-shadow: 0 0 15px rgba(255, 51, 102, 0.35);
 }
 
+/* Profile Avatar Premium Select Gallery */
+.avatar-gallery-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+  display: block;
+}
+
+.avatar-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.avatar-gallery-item {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background-color: var(--card-bg);
+}
+
+.avatar-gallery-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s ease;
+}
+
+.avatar-gallery-item:hover {
+  transform: scale(1.08);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.avatar-gallery-item:hover img {
+  transform: scale(1.05);
+}
+
+.avatar-gallery-item.selected {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
+}
+
+.avatar-gallery-checkmark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 255, 136, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  font-weight: bold;
+  font-size: 1.1rem;
+  animation: fadeIn 0.15s ease;
+}
+
 
