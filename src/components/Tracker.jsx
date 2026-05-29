@@ -49,29 +49,6 @@ function MapEventsHandler({ onManualInteraction }) {
   return null;
 }
 
-// Custom glowing Rider Marker DivIcon
-const riderIcon = typeof window !== 'undefined' ? L.divIcon({
-  html: `<div class="custom-rider-marker"></div>`,
-  className: 'custom-gps-rider',
-  iconSize: [20, 20],
-  iconAnchor: [10, 10]
-}) : null;
-
-// Custom pulsing Group Convoy Companion Icons
-const companionIconRian = typeof window !== 'undefined' ? L.divIcon({
-  html: `<div class="custom-companion-marker" title="Rian Rider (ZX-25R)"></div>`,
-  className: 'custom-convoy-rider',
-  iconSize: [14, 14],
-  iconAnchor: [7, 7]
-}) : null;
-
-const companionIconAlex = typeof window !== 'undefined' ? L.divIcon({
-  html: `<div class="custom-companion-marker" style="background-color: #a855f7; box-shadow: 0 0 15px #a855f7;" title="Alex Rider (CRF250)"></div>`,
-  className: 'custom-convoy-rider',
-  iconSize: [14, 14],
-  iconAnchor: [7, 7]
-}) : null;
-
 // SPBU & Bengkel POI Markers DivIcons
 const spbuIcon = typeof window !== 'undefined' ? L.divIcon({
   html: `<div class="custom-poi-spbu-marker" title="SPBU Fuel Station">⛽</div>`,
@@ -87,29 +64,6 @@ const bengkelIcon = typeof window !== 'undefined' ? L.divIcon({
   iconAnchor: [10, 10]
 }) : null;
 
-// Realistic scenic route in Jakarta: Monas -> MH Thamrin -> Bundaran HI -> Sudirman -> Semanggi -> Senayan -> Blok M
-const JAKARTA_ROUTE = [
-  [-6.175392, 106.827153], // Monas Start
-  [-6.180479, 106.827824],
-  [-6.186524, 106.823485], // Sarinah
-  [-6.192500, 106.823000],
-  [-6.193235, 106.822998], // Bundaran HI
-  [-6.197000, 106.822500],
-  [-6.200192, 106.822345],
-  [-6.204500, 106.821000],
-  [-6.208573, 106.819876], // Dukuh Atas
-  [-6.212000, 106.819000],
-  [-6.214590, 106.818321],
-  [-6.218000, 106.817500],
-  [-6.221543, 106.816543], // Semanggi
-  [-6.223500, 106.814000],
-  [-6.225567, 106.811543], // GBK
-  [-6.228000, 106.808000],
-  [-6.230123, 106.804567], // Senayan
-  [-6.235000, 106.802500],
-  [-6.238456, 106.801234]  // Blok M End
-];
-
 // Mock Biker POIs
 const BIKER_POIS = [
   { id: 'spbu_1', type: 'spbu', name: 'SPBU Shell Sudirman', detail: 'Pertamax Turbo & V-Power Available', lat: -6.195000, lng: 106.822600 },
@@ -121,7 +75,7 @@ const BIKER_POIS = [
 const Tracker = ({ onSaveRide }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [isSimulated, setIsSimulated] = useState(true); // Default to simulated on desktop for easy testing
+  const [isSimulated, setIsSimulated] = useState(false); // GPS Simulator removed: always false for real hardware use
   const [distance, setDistance] = useState(0); // in km
   const [speed, setSpeed] = useState(0); // in km/h
   const [topSpeed, setTopSpeed] = useState(0); // in km/h
@@ -147,7 +101,6 @@ const Tracker = ({ onSaveRide }) => {
   const watchId = useRef(null);
   const timerRef = useRef(null);
   const lastPosition = useRef(null);
-  const simulationIndexRef = useRef(0);
 
   // Real Gyro DeviceOrientation handler
   const handleDeviceOrientation = (event) => {
@@ -176,6 +129,14 @@ const Tracker = ({ onSaveRide }) => {
     }
   };
 
+// Custom glowing Rider Marker DivIcon
+const riderIcon = typeof window !== 'undefined' ? L.divIcon({
+  html: `<div class="custom-rider-marker"></div>`,
+  className: 'custom-gps-rider',
+  iconSize: [20, 20],
+  iconAnchor: [10, 10]
+}) : null;
+
   // Perform Giroskop Zero-Point calibration based on current stang placement angle
   const handleCalibrate = () => {
     setCalibrationOffset(currentRawGamma.current);
@@ -185,8 +146,8 @@ const Tracker = ({ onSaveRide }) => {
   // Ask and bind real mobile gyroscope hardware permissions
   const bindRealGyroscope = async () => {
     if (typeof window !== 'undefined' && 
-        typeof DeviceOrientationEvent !== 'undefined' && 
-        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      typeof DeviceOrientationEvent !== 'undefined' && 
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
       try {
         const permission = await DeviceOrientationEvent.requestPermission();
         if (permission === 'granted') {
@@ -211,99 +172,50 @@ const Tracker = ({ onSaveRide }) => {
 
   useEffect(() => {
     if (isRecording && !isPaused) {
-      if (isSimulated) {
-        // ------------------ GPS SIMULATION MODE ------------------
-        timerRef.current = setInterval(() => {
-          setDuration(prev => {
-            const nextDuration = prev + 1;
+      // ------------------ REAL GPS TRACKING MODE ------------------
+      // Activate Mobile Hardware Gyro sensor listeners
+      bindRealGyroscope();
+
+      timerRef.current = setInterval(() => {
+        setDuration(prev => prev + 1);
+      }, 1000);
+
+      if ("geolocation" in navigator) {
+        watchId.current = navigator.geolocation.watchPosition(
+          (position) => {
+            const { latitude, longitude, speed: gpsSpeed } = position.coords;
             
-            // Advance route coordinate index every second
-            simulationIndexRef.current++;
-            const pointIndex = simulationIndexRef.current % JAKARTA_ROUTE.length;
-            const nextPoint = JAKARTA_ROUTE[pointIndex];
-
-            // Simulate realistic vehicle speed oscillation (acceleration/deceleration)
-            // Oscillates between ~35 km/h and ~85 km/h, simulating real riding traffic
-            const simulatedSpeed = 52 + Math.sin(nextDuration / 4) * 25 + Math.random() * 8;
-            setSpeed(simulatedSpeed);
-            setTopSpeed(ts => Math.max(ts, simulatedSpeed));
+            let currentSpeed = 0;
+            if (gpsSpeed !== null && gpsSpeed >= 0) {
+              currentSpeed = gpsSpeed * 3.6; // m/s to km/h
+            }
             
-            // Update route path state with SPEED coordinate [lat, lng, speed]
-            const nextPointWithSpeed = [nextPoint[0], nextPoint[1], simulatedSpeed];
-            setRoute(prevRoute => [...prevRoute, nextPointWithSpeed]);
+            setSpeed(currentSpeed);
+            setTopSpeed(prev => Math.max(prev, currentSpeed));
 
-            // Simulate Lean Angle cornering based on route curves
-            const turnOscillation = Math.sin(nextDuration / 2.2);
-            if (Math.abs(turnOscillation) > 0.35) {
-              const currentLean = Math.abs(turnOscillation) * 28 + Math.random() * 5;
-              if (turnOscillation < 0) {
-                setLeanLeft(currentLean);
-                setLeanRight(0);
-                setMaxLeanLeft(ml => Math.max(ml, currentLean));
-              } else {
-                setLeanRight(currentLean);
-                setLeanLeft(0);
-                setMaxLeanRight(mr => Math.max(mr, currentLean));
-              }
-            } else {
-              setLeanLeft(0);
-              setLeanRight(0);
+            const newPointWithSpeed = [latitude, longitude, currentSpeed];
+            setRoute(prev => [...prev, newPointWithSpeed]);
+
+            if (lastPosition.current) {
+              const dist = calculateDistance(
+                lastPosition.current.latitude,
+                lastPosition.current.longitude,
+                latitude,
+                longitude
+              );
+              setDistance(prev => prev + dist);
             }
-
-            // Accumulate distance realistically based on simulated speed (speed in km/h / 3600 = km per second)
-            const distInKm = simulatedSpeed / 3600;
-            setDistance(d => d + distInKm);
-
-            return nextDuration;
-          });
-        }, 1000);
-
-      } else {
-        // ------------------ REAL GPS TRACKING MODE ------------------
-        // Activate Mobile Hardware Gyro sensor listeners
-        bindRealGyroscope();
-
-        timerRef.current = setInterval(() => {
-          setDuration(prev => prev + 1);
-        }, 1000);
-
-        if ("geolocation" in navigator) {
-          watchId.current = navigator.geolocation.watchPosition(
-            (position) => {
-              const { latitude, longitude, speed: gpsSpeed } = position.coords;
-              
-              let currentSpeed = 0;
-              if (gpsSpeed !== null && gpsSpeed >= 0) {
-                currentSpeed = gpsSpeed * 3.6; // m/s to km/h
-              }
-              
-              setSpeed(currentSpeed);
-              setTopSpeed(prev => Math.max(prev, currentSpeed));
-
-              const newPointWithSpeed = [latitude, longitude, currentSpeed];
-              setRoute(prev => [...prev, newPointWithSpeed]);
-
-              if (lastPosition.current) {
-                const dist = calculateDistance(
-                  lastPosition.current.latitude,
-                  lastPosition.current.longitude,
-                  latitude,
-                  longitude
-                );
-                setDistance(prev => prev + dist);
-              }
-              lastPosition.current = { latitude, longitude };
-            },
-            (error) => {
-              console.error("Error getting location:", error);
-            },
-            {
-              enableHighAccuracy: true,
-              maximumAge: 0,
-              timeout: 5000
-            }
-          );
-        }
+            lastPosition.current = { latitude, longitude };
+          },
+          (error) => {
+            console.error("Error getting location:", error);
+          },
+          {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 5000
+          }
+        );
       }
     } else {
       clearInterval(timerRef.current);
@@ -320,7 +232,7 @@ const Tracker = ({ onSaveRide }) => {
       }
       unbindRealGyroscope();
     };
-  }, [isRecording, isPaused, isSimulated, calibrationOffset]);
+  }, [isRecording, isPaused, calibrationOffset]);
 
   // Start a new ride from scratch
   const handleStartNew = () => {
@@ -335,23 +247,15 @@ const Tracker = ({ onSaveRide }) => {
     setMaxLeanRight(0);
     setCalibrationOffset(0);
     currentRawGamma.current = 0;
-    simulationIndexRef.current = 0;
     
-    if (isSimulated) {
-      setRoute([[JAKARTA_ROUTE[0][0], JAKARTA_ROUTE[0][1], 0]]);
-      lastPosition.current = { latitude: JAKARTA_ROUTE[0][0], longitude: JAKARTA_ROUTE[0][1] };
-    } else {
-      setRoute([]);
-      lastPosition.current = null;
-    }
+    setRoute([]);
+    lastPosition.current = null;
     
     setIsRecording(true);
     setIsPaused(false);
 
     // Call iOS Gyro Permission on user click gesture
-    if (!isSimulated) {
-      bindRealGyroscope();
-    }
+    bindRealGyroscope();
   };
 
   const handlePause = () => {
@@ -363,9 +267,7 @@ const Tracker = ({ onSaveRide }) => {
 
   const handleResume = () => {
     setIsPaused(false);
-    if (!isSimulated) {
-      bindRealGyroscope();
-    }
+    bindRealGyroscope();
   };
 
   const handleStop = () => {
@@ -424,40 +326,15 @@ const Tracker = ({ onSaveRide }) => {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Calculate live companion coordinates near active rider (only shown in simulation mode)
-  const currentPos = route.length > 0 ? route[route.length - 1] : null;
-  const companionRianPos = currentPos ? [currentPos[0] + 0.0003, currentPos[1] + 0.0004] : null;
-  const companionAlexPos = currentPos ? [currentPos[0] - 0.0004, currentPos[1] - 0.0003] : null;
-
   return (
     <div className="tracker-display" style={{ width: '100%' }}>
-      {/* Mode Selector - Only visible when not recording */}
-      {!isRecording && (
-        <div className="mode-selector">
-          <button 
-            type="button"
-            className={`mode-btn ${isSimulated ? 'active' : ''}`}
-            onClick={() => setIsSimulated(true)}
-          >
-            <Compass size={16} /> GPS Simulator
-          </button>
-          <button 
-            type="button"
-            className={`mode-btn ${!isSimulated ? 'active' : ''}`}
-            onClick={() => setIsSimulated(false)}
-          >
-            <Navigation size={16} /> Real GPS
-          </button>
-        </div>
-      )}
-
       {/* Main Speed Stat */}
       <div className="main-stat">
         {speed.toFixed(1)}
         <span style={{fontSize: '1.5rem', color: 'var(--text-secondary)'}}> km/h</span>
       </div>
       <div style={{color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '2px', fontSize: '0.875rem', marginBottom: '1rem'}}>
-        {isSimulated ? 'Simulated Speed' : 'Current Speed'}
+        Current Speed
       </div>
 
       {/* lean angle giro visualizer */}
@@ -478,16 +355,14 @@ const Tracker = ({ onSaveRide }) => {
             <div className="lean-angle-subtext">Sudut Miring</div>
             
             {/* Real Hardware Calibration Button */}
-            {!isSimulated && (
-              <button 
-                type="button"
-                className="btn btn-primary"
-                onClick={handleCalibrate}
-                style={{ fontSize: '0.7rem', padding: '4px 10px', marginTop: '6px', borderRadius: '8px' }}
-              >
-                <Wrench size={10} style={{ marginRight: '4px' }} /> Kalibrasi 0°
-              </button>
-            )}
+            <button 
+              type="button"
+              className="btn btn-primary"
+              onClick={handleCalibrate}
+              style={{ fontSize: '0.7rem', padding: '4px 10px', marginTop: '6px', borderRadius: '8px' }}
+            >
+              <Wrench size={10} style={{ marginRight: '4px' }} /> Kalibrasi 0°
+            </button>
           </div>
           <div className="lean-stats-column">
             <div className="lean-stat-badge left">
@@ -609,31 +484,6 @@ const Tracker = ({ onSaveRide }) => {
                     <strong>🏍️ ACTIVE RIDER</strong><br />
                     Kecepatan: <strong>{speed.toFixed(1)} km/h</strong><br />
                     Lean Angle: <strong>{leanLeft > 0 ? `L ${leanLeft.toFixed(0)}°` : leanRight > 0 ? `R ${leanRight.toFixed(0)}°` : '0°'}</strong>
-                  </div>
-                </Popup>
-              </Marker>
-            )}
-
-            {/* Convoy Group Ride Companions Radar Markers (Only visible in Simulation/convoy mode) */}
-            {isRecording && !isPaused && isSimulated && companionIconRian && companionRianPos && (
-              <Marker position={companionRianPos} icon={companionIconRian}>
-                <Popup>
-                  <div>
-                    <strong>🏍️ Rian Rider (ZX-25R)</strong><br />
-                    Status: <span style={{color: 'var(--accent-color)'}}>Convoy Companion</span><br />
-                    Jarak: <strong>50m Ahead</strong>
-                  </div>
-                </Popup>
-              </Marker>
-            )}
-
-            {isRecording && !isPaused && isSimulated && companionIconAlex && companionAlexPos && (
-              <Marker position={companionAlexPos} icon={companionIconAlex}>
-                <Popup>
-                  <div>
-                    <strong>🏍️ Alex Rider (CRF250 Rally)</strong><br />
-                    Status: <span style={{color: 'var(--accent-color)'}}>Convoy Companion</span><br />
-                    Jarak: <strong>80m Behind</strong>
                   </div>
                 </Popup>
               </Marker>
