@@ -49,29 +49,41 @@ const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
     }
   });
 
+  const [followersList, setFollowersList] = useState([]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResult, setSearchResult] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
 
-  // Fetch following list on component mount
+  // Fetch following and followers lists on component mount
   useEffect(() => {
     if (supabase && currentUser) {
-      const fetchFollowing = async () => {
+      const fetchSocialData = async () => {
         try {
-          const { data, error } = await supabase
+          // Fetch following list
+          const { data: followingData, error: followingError } = await supabase
             .from('friends')
             .select('*')
             .eq('user_id', currentUser.id);
-          if (!error && data) {
-            setFollowingList(data);
-            localStorage.setItem('ridetrack_following', JSON.stringify(data));
+          if (!followingError && followingData) {
+            setFollowingList(followingData);
+            localStorage.setItem('ridetrack_following', JSON.stringify(followingData));
+          }
+
+          // Fetch followers list
+          const { data: followersData, error: followersError } = await supabase
+            .from('friends')
+            .select('*')
+            .eq('friend_id', currentUser.id);
+          if (!followersError && followersData) {
+            setFollowersList(followersData);
           }
         } catch (err) {
-          console.error("Gagal memuat list teman:", err);
+          console.error("Gagal memuat data sosial:", err);
         }
       };
-      fetchFollowing();
+      fetchSocialData();
     }
   }, [currentUser]);
 
@@ -443,6 +455,28 @@ const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
                   )}
                 </div>
               </div>
+              
+              {/* Followers & Following Stats Badges */}
+              <div style={{ display: 'flex', gap: '16px', alignItems: 'center', margin: '8px 0 10px 0', fontSize: '0.8rem' }}>
+                <div 
+                  title="Klik untuk melihat nama pengikut"
+                  onClick={() => alert(`👥 Daftar Pengikut Anda:\n${followersList.length > 0 ? followersList.map(f => `• ${f.friend_name}`).join('\n') : 'Belum ada pengikut.'}`)}
+                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <strong style={{ color: 'var(--accent-color)', fontSize: '0.92rem' }}>{followersList.length}</strong> 
+                  <span style={{ color: 'var(--text-secondary)' }}>Followers</span>
+                </div>
+                <div style={{ width: '1px', height: '12px', backgroundColor: 'rgba(255,255,255,0.1)' }}></div>
+                <div 
+                  title="Klik untuk melihat yang diikuti"
+                  onClick={() => alert(`👥 Teman yang Anda ikuti:\n${followingList.length > 0 ? followingList.map(f => `• ${f.friend_name} (RT-${f.friend_id})`).join('\n') : 'Belum mengikuti siapa pun.'}`)}
+                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <strong style={{ color: 'var(--accent-color)', fontSize: '0.92rem' }}>{followingList.length}</strong> 
+                  <span style={{ color: 'var(--text-secondary)' }}>Following</span>
+                </div>
+              </div>
+
               <p className="profile-bio">{profile.bio}</p>
             </>
           ) : (
