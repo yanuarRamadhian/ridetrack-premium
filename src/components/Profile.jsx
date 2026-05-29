@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Calendar, Award, Edit, Check, X, Shield, Activity, Compass, Flame } from 'lucide-react';
+import { MapPin, Calendar, Award, Edit, Check, X, Shield, Activity, Compass, Flame, Upload } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 const PRESET_AVATARS = [
@@ -38,6 +38,53 @@ const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({ ...profile });
+
+  // Handle local file uploads & base64 dynamic image compression
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert("Harap unggah file gambar yang valid!");
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          // Dynamic scaling using Canvas to 128x128 for super light cloud sync & fast loading
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 128;
+          const MAX_HEIGHT = 128;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convert to compressed Base64 JPEG URL
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          setFormData({ ...formData, avatar: compressedDataUrl });
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Save profile changes to localStorage and sync global user db
   const handleSave = (e) => {
@@ -190,6 +237,37 @@ const Profile = ({ rides = [], currentUser, onLogout, onProfileUpdate }) => {
                       </div>
                     );
                   })}
+                </div>
+
+                {/* Local Device File Upload Button */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '0.75rem', marginTop: '0.5rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>ATAU UNGGAH FOTO DARI DEVICE:</span>
+                  <label 
+                    className="btn" 
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      gap: '8px', 
+                      fontSize: '0.8rem', 
+                      padding: '10px 14px', 
+                      backgroundColor: 'rgba(0, 255, 136, 0.05)', 
+                      border: '1.5px dashed rgba(0, 255, 136, 0.25)',
+                      color: 'var(--accent-color)',
+                      cursor: 'pointer',
+                      borderRadius: '12px',
+                      transition: 'all 0.2s ease',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    <Upload size={14} /> Pilih Foto dari HP / PC
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      style={{ display: 'none' }} 
+                      onChange={handleFileChange}
+                    />
+                  </label>
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
