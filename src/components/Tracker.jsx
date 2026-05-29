@@ -183,19 +183,20 @@ const riderIcon = typeof window !== 'undefined' ? L.divIcon({
       if ("geolocation" in navigator) {
         watchId.current = navigator.geolocation.watchPosition(
           (position) => {
-            const { latitude, longitude, speed: gpsSpeed } = position.coords;
+            const { latitude, longitude, speed: gpsSpeed, accuracy } = position.coords;
             
+            // 1. Accuracy Filter: Ignore poor accuracy readings (e.g. indoors or weak GPS signal)
+            if (accuracy && accuracy > 35) {
+              console.warn(`Sinyal GPS lemah (Akurasi: ${accuracy.toFixed(1)}m). Mengabaikan titik ini untuk mencegah drift.`);
+              return;
+            }
+
             let currentSpeed = 0;
             if (gpsSpeed !== null && gpsSpeed >= 0) {
               currentSpeed = gpsSpeed * 3.6; // m/s to km/h
             }
-            
-            setSpeed(currentSpeed);
-            setTopSpeed(prev => Math.max(prev, currentSpeed));
 
-            const newPointWithSpeed = [latitude, longitude, currentSpeed];
-            setRoute(prev => [...prev, newPointWithSpeed]);
-
+            // 2. Stationary Drift Filter: If user is not moving more than 5 meters (0.005 km), freeze movement
             if (lastPosition.current) {
               const dist = calculateDistance(
                 lastPosition.current.latitude,
@@ -203,9 +204,26 @@ const riderIcon = typeof window !== 'undefined' ? L.divIcon({
                 latitude,
                 longitude
               );
+
+              // 5 meters threshold AND speed under 1.5 km/h is treated as stationary
+              if (dist < 0.005 && currentSpeed < 1.5) {
+                setSpeed(0); // Force display speed to 0 km/h
+                return; // Do not update distance or append coordinate to the route
+              }
+
+              // Update states for active movement
               setDistance(prev => prev + dist);
+              setSpeed(currentSpeed);
+              setTopSpeed(prev => Math.max(prev, currentSpeed));
+              setRoute(prev => [...prev, [latitude, longitude, currentSpeed]]);
+              lastPosition.current = { latitude, longitude };
+            } else {
+              // Initial starting position
+              setSpeed(currentSpeed);
+              setTopSpeed(prev => Math.max(prev, currentSpeed));
+              setRoute([[latitude, longitude, currentSpeed]]);
+              lastPosition.current = { latitude, longitude };
             }
-            lastPosition.current = { latitude, longitude };
           },
           (error) => {
             console.error("Error getting location:", error);
